@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Marie's Sudoku</title>
 
-  <!-- Script-font (lesbar cursive). Bytt gjerne til Allura/Great Vibes hvis du vil. -->
   <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&display=swap" rel="stylesheet">
 
   <style>
@@ -46,11 +45,11 @@
       display:flex;
       flex-wrap:wrap;
       align-items:center;
-      justify-content:center; /* midtstill tittel + knapper som gruppe */
+      justify-content:center; 
       gap: 16px 18px;
       margin-bottom: 12px;
 
-      /* gjør at header visuelt matcher brettet */
+
       max-width: 540px;
       margin-left:auto;
       margin-right:auto;
@@ -63,7 +62,7 @@
       font-size: 68px;
       font-weight: 400;
       letter-spacing: 0.5px;
-      line-height: 0.9; /* strammer “luften” rundt script-tekst */
+      line-height: 0.9; 
       color: var(--text);
     }
 
@@ -179,9 +178,6 @@
       grid-column: span 3;
     }
 
-    /* ---------- Responsive ---------- */
-
-    /* Tablet og ned: tittel skalerer og alt får litt mindre padding */
     @media (max-width: 768px){
       .app{ padding: 16px; width: min(980px, 96vw); }
 
@@ -197,11 +193,10 @@
       }
 
       .keypad{
-        display: grid; /* vis mobil-knapper på tablet/mobil */
+        display: grid; 
       }
     }
 
-    /* Mobil: enda strammere */
     @media (max-width: 480px){
       .app{ padding: 12px; }
 
@@ -252,7 +247,6 @@
     <main>
       <div id="grid" class="grid" role="grid" aria-label="Sudoku grid"></div>
 
-      <!-- Mobil-knapper -->
       <div id="keypad" class="keypad" aria-label="Sudoku keypad">
         <button data-value="1">1</button>
         <button data-value="2">2</button>
@@ -413,7 +407,6 @@
           const input=document.createElement("input");
           input.setAttribute("maxlength","1");
 
-          // For å redusere mobil-tastatur, men desktop fungerer fortsatt med keydown.
           input.setAttribute("inputmode","none");
 
           input.addEventListener("focus", ()=>selectCell(i));
@@ -573,3 +566,4 @@
   </script>
 </body>
 </html>
+
