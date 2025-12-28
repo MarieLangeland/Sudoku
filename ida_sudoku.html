@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ida's Sudoku</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg: #ffffff;
+      --text: #111111;
+      --muted: #666666;
+      --line: #cccccc;
+      --accent: #111111;
+      --bad: #b00020;
+
+      --grid-bg: #f4f4f4;
+      --cell-border: #dddddd;
+      --subgrid: #999999;
+    }
+
+    *{ box-sizing:border-box; }
+
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+    }
+
+    .app{
+      width: min(900px, 95vw);
+      padding: 24px;
+    }
+
+    header{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:center;
+      align-items:center;
+      gap:16px;
+      margin-bottom:16px;
+      max-width:540px;
+      margin-inline:auto;
+    }
+
+    .title{
+      margin:0;
+      font-family: "Playfair Display", serif;
+      font-size: 48px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .controls{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      justify-content:center;
+    }
+
+    button{
+      border:1px solid var(--line);
+      background:#ffffff;
+      color:var(--text);
+      padding:8px 14px;
+      border-radius:6px;
+      font-size:14px;
+      cursor:pointer;
+      min-height:38px;
+    }
+
+    button:hover{
+      background:#f2f2f2;
+    }
+
+    .status{
+      width:100%;
+      text-align:center;
+      font-size:13px;
+      color:var(--muted);
+      margin-top:4px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(9,1fr);
+      width:min(540px, 92vw);
+      aspect-ratio:1/1;
+      margin:0 auto;
+      border:2px solid var(--line);
+      background:var(--grid-bg);
+    }
+
+    .cell{
+      border:1px solid var(--cell-border);
+      display:grid;
+      place-items:center;
+      font-size:clamp(18px, 3vw, 24px);
+    }
+
+    .cell input{
+      width:100%;
+      height:100%;
+      border:0;
+      background:transparent;
+      text-align:center;
+      font-size:inherit;
+      color:var(--text);
+      outline:none;
+      caret-color:transparent;
+    }
+
+    .cell.given input{
+      font-weight:600;
+    }
+
+    .cell.selected{
+      outline:2px solid var(--accent);
+      outline-offset:-2px;
+    }
+
+    .cell.same{
+      background:#eaeaea;
+    }
+
+    .cell.bad input{
+      color:var(--bad);
+      font-weight:600;
+    }
+
+    .cell.subgrid-right{
+      border-right:2px solid var(--subgrid);
+    }
+    .cell.subgrid-bottom{
+      border-bottom:2px solid var(--subgrid);
+    }
+
+    .keypad{
+      width:min(540px, 92vw);
+      margin:16px auto 0;
+      display:none;
+      grid-template-columns:repeat(4,1fr);
+      gap:10px;
+    }
+
+    .keypad button{
+      min-height:44px;
+      font-size:16px;
+      border-radius:6px;
+    }
+
+    .keypad button[data-action="erase"]{
+      grid-column: span 3;
+    }
+
+    @media (max-width:768px){
+      .keypad{ display:grid; }
+      .title{ font-size:42px; }
+    }
+
+    @media (max-width:480px){
+      .title{ font-size:36px; }
+      .app{ padding:16px; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="app">
+
+  <header>
+    <h1 class="title">Ida's Sudoku</h1>
+
+    <div class="controls">
+      <button id="newGame">Nytt spill</button>
+      <button id="check">Sjekk</button>
+      <button id="reveal">Vis løsning</button>
+    </div>
+
+    <span id="status" class="status"></span>
+  </header>
+
+  <div id="grid" class="grid"></div>
+
+  <div id="keypad" class="keypad">
+    <button data-value="1">1</button>
+    <button data-value="2">2</button>
+    <button data-value="3">3</button>
+    <button data-value="4">4</button>
+
+    <button data-value="5">5</button>
+    <button data-value="6">6</button>
+    <button data-value="7">7</button>
+    <button data-value="8">8</button>
+
+    <button data-value="9">9</button>
+    <button data-action="erase">Slett</button>
+  </div>
+
+</div>
+
+<script>
+    const REMOVE_COUNT = 50;
+
+    const gridEl = document.getElementById("grid");
+    const statusEl = document.getElementById("status");
+    const newBtn = document.getElementById("newGame");
+    const checkBtn = document.getElementById("check");
+    const revealBtn = document.getElementById("reveal");
+    const keypadEl = document.getElementById("keypad");
+
+    let puzzle = null, solution = null, givens = null, selectedIndex = 0, inputs = [];
+
+    const idx = (r,c) => r*9+c;
+    const rc = (i) => [Math.floor(i/9), i%9];
+
+    function setStatus(msg, kind="") {
+      statusEl.textContent = msg;
+      statusEl.style.color =
+        (kind==="ok") ? "var(--ok)" :
+        (kind==="bad") ? "var(--bad)" :
+        "var(--muted)";
+    }
+
+    function shuffle(a){
+      for(let i=a.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));
+        [a[i],a[j]]=[a[j],a[i]];
+      }
+      return a;
+    }
+
+    function isValid(board, pos, val){
+      const [r,c]=rc(pos);
+      for(let cc=0;cc<9;cc++){
+        const p=idx(r,cc);
+        if(p!==pos && board[p]===val) return false;
+      }
+      for(let rr=0;rr<9;rr++){
+        const p=idx(rr,c);
+        if(p!==pos && board[p]===val) return false;
+      }
+      const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+      for(let rr=br;rr<br+3;rr++){
+        for(let cc=bc;cc<bc+3;cc++){
+          const p=idx(rr,cc);
+          if(p!==pos && board[p]===val) return false;
+        }
+      }
+      return true;
+    }
+
+    function candidates(board, pos){
+      const out=[];
+      for(let v=1;v<=9;v++) if(isValid(board,pos,v)) out.push(v);
+      return out;
+    }
+
+    function solveOne(board){
+      let bestPos=-1, bestC=null;
+      for(let i=0;i<81;i++){
+        if(board[i]!==0) continue;
+        const c=candidates(board,i);
+        if(c.length===0) return false;
+        if(!bestC || c.length<bestC.length){
+          bestC=c; bestPos=i;
+          if(c.length===1) break;
+        }
+      }
+      if(bestPos===-1) return true;
+      shuffle(bestC);
+      for(const v of bestC){
+        board[bestPos]=v;
+        if(solveOne(board)) return true;
+        board[bestPos]=0;
+      }
+      return false;
+    }
+
+    function countSolutions(board, limit=2){
+      let bestPos=-1, bestC=null;
+      for(let i=0;i<81;i++){
+        if(board[i]!==0) continue;
+        const c=candidates(board,i);
+        if(c.length===0) return 0;
+        if(!bestC || c.length<bestC.length){
+          bestC=c; bestPos=i;
+          if(c.length===1) break;
+        }
+      }
+      if(bestPos===-1) return 1;
+      let count=0;
+      for(const v of bestC){
+        board[bestPos]=v;
+        count += countSolutions(board, limit-count);
+        board[bestPos]=0;
+        if(count>=limit) return count;
+      }
+      return count;
+    }
+
+    function generateFullSolution(){
+      const board=Array(81).fill(0);
+      const firstRow=shuffle([1,2,3,4,5,6,7,8,9]);
+      for(let c=0;c<9;c++) board[idx(0,c)] = firstRow[c];
+      solveOne(board);
+      return board;
+    }
+
+    function makePuzzleFromSolution(sol, removeCount){
+      const board=sol.slice();
+      const positions=shuffle([...Array(81).keys()]);
+      let removed=0;
+
+      for(const p of positions){
+        if(removed>=removeCount) break;
+        const backup=board[p];
+        board[p]=0;
+
+        const copy=board.slice();
+        const n=countSolutions(copy, 2);
+        if(n!==1) board[p]=backup;
+        else removed++;
+      }
+      return board;
+    }
+
+    function buildGridUI(){
+      gridEl.innerHTML="";
+      inputs=[];
+
+      for(let r=0;r<9;r++){
+        for(let c=0;c<9;c++){
+          const i=idx(r,c);
+          const cell=document.createElement("div");
+          cell.className="cell";
+
+          if(c===2||c===5) cell.classList.add("subgrid-right");
+          if(r===2||r===5) cell.classList.add("subgrid-bottom");
+
+          const input=document.createElement("input");
+          input.setAttribute("maxlength","1");
+
+          input.setAttribute("inputmode","none");
+
+          input.addEventListener("focus", ()=>selectCell(i));
+          input.addEventListener("mousedown", ()=>selectCell(i));
+          input.addEventListener("touchstart", ()=>selectCell(i), {passive:true});
+          input.addEventListener("keydown", (e)=>onKeyDown(e,i));
+
+          cell.appendChild(input);
+          gridEl.appendChild(cell);
+          inputs.push(input);
+        }
+      }
+    }
+
+    function selectCell(i){
+      selectedIndex=i;
+      render();
+      inputs[i].focus({preventScroll:true});
+    }
+
+    function setValueAtSelected(value){
+      const i = selectedIndex;
+      if(givens[i]) return;
+
+      if(value === 0){
+        puzzle[i]=0;
+      }else{
+        puzzle[i]=value;
+      }
+      render();
+    }
+
+    function onKeyDown(e, i){
+      const key=e.key;
+
+      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(key)){
+        e.preventDefault();
+        const [r,c]=rc(i);
+        let nr=r, nc=c;
+        if(key==="ArrowUp") nr=Math.max(0,r-1);
+        if(key==="ArrowDown") nr=Math.min(8,r+1);
+        if(key==="ArrowLeft") nc=Math.max(0,c-1);
+        if(key==="ArrowRight") nc=Math.min(8,c+1);
+        selectCell(idx(nr,nc));
+        return;
+      }
+
+      if(key==="Backspace" || key==="Delete" || key==="0"){
+        e.preventDefault();
+        if(!givens[i]) setValueAtSelected(0);
+        return;
+      }
+
+      if(/^[1-9]$/.test(key)){
+        e.preventDefault();
+        if(givens[i]) return;
+        setValueAtSelected(Number(key));
+        return;
+      }
+
+      if(key==="Tab") return;
+      if(key.length===1) e.preventDefault();
+    }
+
+    function isCompleteAndCorrect(){
+      for(let i=0;i<81;i++){
+        const v=puzzle[i];
+        if(v===0) return false;
+        if(!isValid(puzzle,i,v)) return false;
+      }
+      return true;
+    }
+
+    function render(){
+      const selVal = puzzle[selectedIndex];
+
+      for(let i=0;i<81;i++){
+        const cell=inputs[i].parentElement;
+        cell.classList.remove("selected","same","bad","given");
+
+        if(givens[i]) cell.classList.add("given");
+
+        const v=puzzle[i];
+        inputs[i].value = (v===0) ? "" : String(v);
+
+        if(i===selectedIndex) cell.classList.add("selected");
+        if(selVal!==0 && v===selVal) cell.classList.add("same");
+        if(v!==0 && !isValid(puzzle,i,v)) cell.classList.add("bad");
+
+        inputs[i].readOnly = givens[i];
+      }
+
+      if(isCompleteAndCorrect()) setStatus("Ferdig! 🎉","ok");
+      else setStatus("");
+    }
+
+    function newGame(){
+      setStatus("Lager nytt spill…");
+
+      solution = generateFullSolution();
+      puzzle = makePuzzleFromSolution(solution, REMOVE_COUNT);
+      givens = puzzle.map(v => v!==0);
+
+      const firstEmpty = puzzle.findIndex(v=>v===0);
+      selectedIndex = firstEmpty>=0 ? firstEmpty : 0;
+
+      render();
+      setStatus("Nytt spill (medium)");
+      selectCell(selectedIndex);
+    }
+
+    function checkNow(){
+      let hasEmpty=false, hasError=false;
+      for(let i=0;i<81;i++){
+        const v=puzzle[i];
+        if(v===0) hasEmpty=true;
+        if(v!==0 && !isValid(puzzle,i,v)) hasError=true;
+      }
+      if(!hasEmpty && !hasError) setStatus("Alt riktig ✅","ok");
+      else if(hasError) setStatus("Du har minst én feil ❌","bad");
+      else setStatus("Ingen feil så langt — men ikke ferdig ennå.");
+    }
+
+    function revealSolution(){
+      puzzle = solution.slice();
+      givens = Array(81).fill(true);
+      render();
+      setStatus("Løsning vist.");
+    }
+
+    keypadEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if(!btn) return;
+
+      const val = btn.getAttribute("data-value");
+      const action = btn.getAttribute("data-action");
+
+      if(val){
+        setValueAtSelected(Number(val));
+        return;
+      }
+
+      if(action === "erase"){
+        setValueAtSelected(0);
+        return;
+      }
+     
+    });
+
+    newBtn.addEventListener("click", newGame);
+    checkBtn.addEventListener("click", checkNow);
+    revealBtn.addEventListener("click", revealSolution);
+
+    buildGridUI();
+    newGame();
+  </script>
+</body>
+</html>
